@@ -1,0 +1,19 @@
+# Render Blueprint — deploys the ZeTheta DEX API (Fastify + SSE) as a Docker web service.
+# Create it via Render → New → Blueprint, pointed at this repo. Render injects PORT and
+# provides HTTPS automatically; the API reads process.env.PORT and binds 0.0.0.0.
+services:
+  - type: web
+    name: zetheta-dex-api
+    runtime: docker
+    repo: https://github.com/TheRustVeil/Dex_order_book
+    branch: main
+    dockerfilePath: ./docker/Dockerfile.backend
+    dockerContext: .
+    plan: free
+    region: oregon
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: P2P_ENABLED
+        value: "0"
