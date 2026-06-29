@@ -1,0 +1,77 @@
+FROM node:20-alpine AS base
+RUN corepack enable && corepack prepare pnpm@11 --activate
+# Build tools for any native modules in the dependency tree
+RUN apk add --no-cache python3 make g++
+
+# ── Dependency layer ──────────────────────────────────────────────────────────
+FROM base AS deps
+WORKDIR /app
+# pnpm frozen install requires ALL workspace package.json manifests to be present
+COPY .npmrc pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/frontend/package.json     ./packages/frontend/
+COPY packages/api/package.json          ./packages/api/
+COPY packages/matching-engine/package.json ./packages/matching-engine/
+COPY packages/contracts/package.json    ./packages/contracts/
+COPY packages/p2p-network/package.json  ./packages/p2p-network/
+# Install only the frontend's dependency closure (faster than installing everything)
+RUN pnpm install --frozen-lockfile --filter @zetheta/frontend
+
+# ── Build layer ───────────────────────────────────────────────────────────────
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+# Source files (node_modules excluded via .dockerignore)
+COPY . .
+
+# NEXT_PUBLIC_* vars are baked into the JS bundle at build time — NOT runtime.
+# NEXT_PUBLIC_API_URL must be reachable from the browser:
+#   - In Docker Compose the host maps backend:3001 → localhost:3001
+#   - packages/frontend/.env already sets this; declare here as override/fallback.
+ARG NEXT_PUBLIC_API_URL=http://localhost:3001
+ARG NEXT_PUBLIC_CHAIN_ID=11155111
+ARG NEXT_PUBLIC_ORDERBOOK_CONTRACT
+ARG NEXT_PUBLIC_SETTLEMENT_CONTRACT
+ARG NEXT_PUBLIC_TOKEN_REGISTRY_CONTRACT
+ARG NEXT_PUBLIC_FACTORY_CONTRACT
+ARG NEXT_PUBLIC_FEE_MANAGER_CONTRACT
+
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
+    NEXT_PUBLIC_CHAIN_ID=$NEXT_PUBLIC_CHAIN_ID \
+    NEXT_PUBLIC_ORDERBOOK_CONTRACT=$NEXT_PUBLIC_ORDERBOOK_CONTRACT \
+    NEXT_PUBLIC_SETTLEMENT_CONTRACT=$NEXT_PUBLIC_SETTLEMENT_CONTRACT \
+    NEXT_PUBLIC_TOKEN_REGISTRY_CONTRACT=$NEXT_PUBLIC_TOKEN_REGISTRY_CONTRACT \
+    NEXT_PUBLIC_FACTORY_CONTRACT=$NEXT_PUBLIC_FACTORY_CONTRACT \
+    NEXT_PUBLIC_FEE_MANAGER_CONTRACT=$NEXT_PUBLIC_FEE_MANAGER_CONTRACT \
+    NEXT_TELEMETRY_DISABLED=1
+
+RUN pnpm --filter @zetheta/frontend build
+
+# ── Production runner ─────────────────────────────────────────────────────────
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
+# Standalone output mirrors the monorepo directory tree:
+#   packages/frontend/.next/standalone/
+#     packages/frontend/server.js   <- entry point
+#     node_modules/                 <- minimal runtime deps
+COPY --from=builder --chown=nextjs:nodejs \
+     /app/packages/frontend/.next/standalone ./
+
+# Static assets must be co-located with the .next directory for the server
+COPY --from=builder --chown=nextjs:nodejs \
+     /app/packages/frontend/.next/static \
+     ./packages/frontend/.next/static
+
+# Public directory served directly
+COPY --from=builder --chown=nextjs:nodejs \
+     /app/packages/frontend/public \
+     ./packages/frontend/public
+
+USER nextjs
+EXPOSE 3000
+ENV PORT=3000 HOSTNAME="0.0.0.0"
+CMD ["node", "packages/frontend/server.js"]

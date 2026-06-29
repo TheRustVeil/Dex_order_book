@@ -1,0 +1,729 @@
+openapi: 3.1.0
+info:
+  title: ZeTheta DEX API
+  version: 1.0.0
+  description: >
+    REST + WebSocket API for the ZeTheta Decentralized Exchange.
+    CONFIDENTIAL — ZeTheta Algorithms Private Limited. All rights reserved.
+  contact:
+    name: ZeTheta Internal
+    email: dev@zetheta.internal
+
+servers:
+  - url: http://localhost:3001
+    description: Local development
+
+tags:
+  - name: Orders
+    description: Place, cancel, and query CLOB orders
+  - name: OrderBook
+    description: Live order book snapshots and depth
+  - name: AMM
+    description: AMM swap, liquidity management, and IL
+  - name: Trades
+    description: Trade history and statistics
+  - name: Metrics
+    description: Prometheus metrics endpoint
+
+# ─── Components ────────────────────────────────────────────────────────────────
+
+components:
+  schemas:
+
+    Side:
+      type: string
+      enum: [buy, sell]
+
+    OrderType:
+      type: string
+      enum: [limit, market, stop_limit]
+
+    OrderStatus:
+      type: string
+      enum: [open, partial, filled, cancelled]
+
+    Order:
+      type: object
+      required: [id, trader, pairId, side, type, price, quantity, filled, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        trader:
+          type: string
+          pattern: "^0x[0-9a-fA-F]{40}$"
+          example: "0xAbCd1234..."
+        pairId:
+          type: string
+          example: "ETH-USDC"
+        side:
+          $ref: '#/components/schemas/Side'
+        type:
+          $ref: '#/components/schemas/OrderType'
+        price:
+          type: number
+          format: double
+          minimum: 0
+          example: 2000.50
+        quantity:
+          type: number
+          format: double
+          minimum: 0
+          exclusiveMinimum: true
+          example: 1.5
+        filled:
+          type: number
+          format: double
+          minimum: 0
+          example: 0.75
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        stopPrice:
+          type: number
+          format: double
+          nullable: true
+        expiry:
+          type: integer
+          format: int64
+          description: Unix timestamp. 0 = no expiry.
+          example: 0
+        createdAt:
+          type: string
+          format: date-time
+
+    Trade:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        pairId:
+          type: string
+        price:
+          type: number
+          format: double
+        quantity:
+          type: number
+          format: double
+        buyOrderId:
+          type: string
+          format: uuid
+        sellOrderId:
+          type: string
+          format: uuid
+        timestamp:
+          type: string
+          format: date-time
+
+    PriceLevel:
+      type: object
+      properties:
+        price:
+          type: number
+          format: double
+        quantity:
+          type: number
+          format: double
+        orderCount:
+          type: integer
+
+    OrderBookSnapshot:
+      type: object
+      properties:
+        pairId:
+          type: string
+        bids:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceLevel'
+        asks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceLevel'
+        bestBid:
+          type: number
+          format: double
+          nullable: true
+        bestAsk:
+          type: number
+          format: double
+          nullable: true
+        spread:
+          type: number
+          format: double
+          nullable: true
+        midPrice:
+          type: number
+          format: double
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+
+    AMMPool:
+      type: object
+      properties:
+        pairId:
+          type: string
+        reserveA:
+          type: number
+          format: double
+        reserveB:
+          type: number
+          format: double
+        k:
+          type: number
+          format: double
+        price:
+          type: number
+          format: double
+        feeBps:
+          type: integer
+          example: 30
+
+    LPPosition:
+      type: object
+      properties:
+        wallet:
+          type: string
+        pairId:
+          type: string
+        lpBalance:
+          type: number
+          format: double
+        sharePercent:
+          type: number
+          format: double
+        ethValue:
+          type: number
+          format: double
+        usdcValue:
+          type: number
+          format: double
+        entryPrice:
+          type: number
+          format: double
+        ilPercent:
+          type: number
+          format: double
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        code:
+          type: string
+
+  responses:
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    BadRequest:
+      description: Invalid request parameters
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+# ─── Paths ─────────────────────────────────────────────────────────────────────
+
+paths:
+
+  # ─── Orders ─────────────────────────────────────────────────────────────────
+
+  /orders:
+    post:
+      summary: Place a new order
+      tags: [Orders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [trader, pairId, side, type, quantity]
+              properties:
+                trader:
+                  type: string
+                  pattern: "^0x[0-9a-fA-F]{40}$"
+                pairId:
+                  type: string
+                  example: "ETH-USDC"
+                side:
+                  $ref: '#/components/schemas/Side'
+                type:
+                  $ref: '#/components/schemas/OrderType'
+                price:
+                  type: number
+                  format: double
+                  description: Required for limit and stop_limit orders
+                quantity:
+                  type: number
+                  format: double
+                stopPrice:
+                  type: number
+                  format: double
+                  description: Required for stop_limit orders
+                expiry:
+                  type: integer
+                  format: int64
+                  default: 0
+      responses:
+        '201':
+          description: Order placed (and possibly partially or fully matched)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  order:
+                    $ref: '#/components/schemas/Order'
+                  trades:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Trade'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+    get:
+      summary: List open orders for a wallet
+      tags: [Orders]
+      parameters:
+        - name: trader
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^0x[0-9a-fA-F]{40}$"
+        - name: pairId
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/OrderStatus'
+      responses:
+        '200':
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+
+  /orders/history:
+    get:
+      summary: Paginated order history for a wallet
+      tags: [Orders]
+      parameters:
+        - name: trader
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Paginated order history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orders:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+
+  /orders/{orderId}:
+    get:
+      summary: Get a specific order
+      tags: [Orders]
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Cancel an order
+      tags: [Orders]
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [trader]
+              properties:
+                trader:
+                  type: string
+                  description: Must match the order's trader address
+      responses:
+        '200':
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '403':
+          description: Trader address mismatch
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # ─── Order Book ──────────────────────────────────────────────────────────────
+
+  /orderbook/{pairId}:
+    get:
+      summary: Get current order book snapshot
+      tags: [OrderBook]
+      parameters:
+        - name: pairId
+          in: path
+          required: true
+          schema:
+            type: string
+            example: "ETH-USDC"
+        - name: depth
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Number of price levels to return per side
+      responses:
+        '200':
+          description: Order book snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderBookSnapshot'
+
+  # ─── AMM ────────────────────────────────────────────────────────────────────
+
+  /amm/pool/{pairId}:
+    get:
+      summary: Get AMM pool state
+      tags: [AMM]
+      parameters:
+        - name: pairId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pool state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AMMPool'
+
+  /amm/swap:
+    post:
+      summary: Quote or execute a swap
+      tags: [AMM]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pairId, tokenIn, amountIn]
+              properties:
+                pairId:
+                  type: string
+                tokenIn:
+                  type: string
+                  enum: [A, B]
+                amountIn:
+                  type: number
+                  format: double
+                slippageBps:
+                  type: integer
+                  default: 50
+                  description: Max slippage in basis points (50 = 0.5%)
+                dryRun:
+                  type: boolean
+                  default: false
+                  description: If true, returns quote without changing state
+                wallet:
+                  type: string
+                  description: Required when dryRun is false
+      responses:
+        '200':
+          description: Swap result or quote
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  amountOut:
+                    type: number
+                    format: double
+                  effectivePrice:
+                    type: number
+                    format: double
+                  priceImpact:
+                    type: number
+                    format: double
+                  fee:
+                    type: number
+                    format: double
+                  executed:
+                    type: boolean
+
+  /amm/liquidity/add:
+    post:
+      summary: Add liquidity to a pool
+      tags: [AMM]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pairId, amountA, amountB, wallet]
+              properties:
+                pairId:
+                  type: string
+                amountA:
+                  type: number
+                  format: double
+                amountB:
+                  type: number
+                  format: double
+                slippageBps:
+                  type: integer
+                  default: 50
+                wallet:
+                  type: string
+      responses:
+        '200':
+          description: Liquidity added; LP tokens minted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lpMinted:
+                    type: number
+                  position:
+                    $ref: '#/components/schemas/LPPosition'
+
+  /amm/liquidity/remove:
+    post:
+      summary: Remove liquidity from a pool
+      tags: [AMM]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pairId, lpAmount, wallet]
+              properties:
+                pairId:
+                  type: string
+                lpAmount:
+                  type: number
+                  format: double
+                wallet:
+                  type: string
+      responses:
+        '200':
+          description: Liquidity removed; tokens returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  amountA:
+                    type: number
+                  amountB:
+                    type: number
+                  position:
+                    $ref: '#/components/schemas/LPPosition'
+
+  /amm/position:
+    get:
+      summary: Get wallet LP position
+      tags: [AMM]
+      parameters:
+        - name: wallet
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: pairId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: LP position details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LPPosition'
+
+  /amm/il:
+    post:
+      summary: Calculate impermanent loss for a hypothetical position
+      tags: [AMM]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entryPrice, currentPrice]
+              properties:
+                entryPrice:
+                  type: number
+                  format: double
+                currentPrice:
+                  type: number
+                  format: double
+                amountA:
+                  type: number
+                  format: double
+                  default: 1.0
+      responses:
+        '200':
+          description: IL calculation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ilPercent:
+                    type: number
+                    description: Negative = loss. e.g. -0.0572 = -5.72%
+                  holdValue:
+                    type: number
+                  poolValue:
+                    type: number
+                  ratio:
+                    type: number
+
+  # ─── Trades ─────────────────────────────────────────────────────────────────
+
+  /trades:
+    get:
+      summary: Recent trades
+      tags: [Trades]
+      parameters:
+        - name: pairId
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+      responses:
+        '200':
+          description: Recent trades
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  trades:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Trade'
+
+  /trades/stats:
+    get:
+      summary: 24h trading statistics
+      tags: [Trades]
+      parameters:
+        - name: pairId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  volume24h:
+                    type: number
+                  tradeCount24h:
+                    type: integer
+                  high24h:
+                    type: number
+                  low24h:
+                    type: number
+                  vwap24h:
+                    type: number
+
+  # ─── Metrics ────────────────────────────────────────────────────────────────
+
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      tags: [Metrics]
+      responses:
+        '200':
+          description: Prometheus text format
+          content:
+            text/plain:
+              schema:
+                type: string
+              example: |
+                # HELP dex_orders_total Total orders placed
+                # TYPE dex_orders_total counter
+                dex_orders_total 1234

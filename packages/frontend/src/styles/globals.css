@@ -1,0 +1,4 @@
+/* This file is superseded by src/app/globals.css — kept as stub to avoid import errors */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

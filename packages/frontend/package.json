@@ -1,0 +1,33 @@
+{
+  "name": "@zetheta/frontend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "ethers": "^6.17.0",
+    "lightweight-charts": "^4.2.1",
+    "next": "14.2.29",
+    "react": "^18",
+    "react-dom": "^18",
+    "recharts": "^2.12.7",
+    "zustand": "^4.5.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.5.0",
+    "browserslist": "^4.28.2",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.29",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}

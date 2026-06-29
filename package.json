@@ -1,0 +1,19 @@
+{
+  "name": "zetheta-dex-orderbook",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @zetheta/frontend dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "lint": "turbo lint",
+    "setup": "bash scripts/setup.sh"
+  },
+  "devDependencies": {
+    "turbo": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=11.0.0"
+  }
+}

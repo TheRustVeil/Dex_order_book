@@ -1,0 +1,8 @@
+packages:
+  - 'packages/*'
+allowBuilds:
+  '@apollo/protobufjs': true
+  '@nestjs/core': true
+  better-sqlite3: set this to true or false
+  keccak: true
+  secp256k1: true

@@ -1,0 +1,6 @@
+# ZeTheta DEX — Code Owners
+# All PRs require review from ZeTheta engineering team
+
+* @ZethetaIntern
+/packages/contracts/ @ZethetaIntern
+/packages/p2p-network/ @ZethetaIntern

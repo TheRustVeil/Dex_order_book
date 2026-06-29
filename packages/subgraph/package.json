@@ -1,0 +1,15 @@
+{
+  "name": "@zetheta/subgraph",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "codegen": "graph codegen",
+    "build": "graph build",
+    "deploy:hosted": "graph deploy --product hosted-service zetheta/dex-orderbook",
+    "deploy:studio": "graph deploy --studio zetheta-dex"
+  },
+  "dependencies": {
+    "@graphprotocol/graph-cli": "^0.93.0",
+    "@graphprotocol/graph-ts": "^0.35.1"
+  }
+}

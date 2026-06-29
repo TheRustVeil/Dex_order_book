@@ -1,0 +1,48 @@
+FROM node:20-alpine AS base
+RUN corepack enable && corepack prepare pnpm@11 --activate
+# Build tools for native modules (unrs-resolver, etc.)
+RUN apk add --no-cache python3 make g++
+
+# ── Dependency layer ──────────────────────────────────────────────────────────
+FROM base AS deps
+WORKDIR /app
+# All workspace manifests must be present for a frozen install
+COPY .npmrc pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY packages/api/package.json          ./packages/api/
+COPY packages/matching-engine/package.json ./packages/matching-engine/
+COPY packages/frontend/package.json     ./packages/frontend/
+COPY packages/contracts/package.json    ./packages/contracts/
+COPY packages/p2p-network/package.json  ./packages/p2p-network/
+# Install API + its workspace dependency (matching-engine), including devDeps
+# so that ts-node (a devDep of @zetheta/api) is available in the runner.
+RUN pnpm install --frozen-lockfile --filter @zetheta/api...
+
+# ── Production runner ─────────────────────────────────────────────────────────
+# We run the API with ts-node rather than compiling to JS.
+# Reason: @zetheta/matching-engine's package.json "main" points to its
+# TypeScript source (src/engine/index.ts), which ts-node can load directly
+# via the "experimentalResolver" option in packages/api/tsconfig.json.
+# Compiling with tsc would require the matching-engine built to dist/ first.
+FROM base AS runner
+WORKDIR /app
+
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 apiuser
+
+COPY --from=deps --chown=apiuser:nodejs /app/node_modules ./node_modules
+COPY --chown=apiuser:nodejs packages/api            ./packages/api
+COPY --chown=apiuser:nodejs packages/matching-engine ./packages/matching-engine
+
+# JSON file store directory (mounted as a volume in docker-compose for persistence)
+RUN mkdir -p packages/api/data && chown -R apiuser:nodejs packages/api/data
+
+USER apiuser
+EXPOSE 3001
+
+# P2P networking requires host network access and additional packages not in
+# this image — disable it for the containerised environment.
+ENV NODE_ENV=production P2P_ENABLED=0
+
+CMD ["node_modules/.bin/ts-node", \
+     "-P", "packages/api/tsconfig.json", \
+     "packages/api/src/main.ts"]

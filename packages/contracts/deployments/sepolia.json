@@ -1,0 +1,14 @@
+{
+  "network": "sepolia",
+  "chainId": "11155111",
+  "deployer": "0x45Ac14861BD3b1c736F01B3855784648a8b5Ac51",
+  "deployedAt": "2026-06-25T16:54:37.933Z",
+  "contracts": {
+    "TokenRegistry": "0xE94D84Ab1fC4D39fB1c4868B388AE4300Dc9a407",
+    "Settlement": "0x63297Fc01bA595cB144816905659C9a92E94Fd89",
+    "FeeManager": "0x73E1Cd0e868299F3aD9201748a3b643FCE1482EE",
+    "Factory": "0x4F8ff85d11d9EBc7CE7Bf3C1CB667d20A8fE3168",
+    "OrderBook": "0xC37A09aa53464452a73898e378734A26dFF1a053",
+    "LiquidityPoolImpl": "(skipped — zero addresses rejected)"
+  }
+}

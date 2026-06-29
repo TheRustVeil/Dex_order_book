@@ -1,0 +1,51 @@
+type Order @entity {
+  id: ID!
+  trader: Bytes!
+  pairId: Bytes!
+  side: String!
+  orderType: String!
+  price: BigDecimal!
+  quantity: BigDecimal!
+  filled: BigDecimal!
+  status: String!
+  nonce: BigInt!
+  expiry: BigInt!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type Trade @entity {
+  id: ID!
+  buyOrderId: Bytes!
+  sellOrderId: Bytes!
+  price: BigDecimal!
+  quantity: BigDecimal!
+  fee: BigDecimal!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type Settlement @entity {
+  id: ID!
+  trader: Bytes!
+  token: Bytes!
+  amount: BigDecimal!
+  fee: BigDecimal!
+  blockNumber: BigInt!
+  blockTimestamp: BigInt!
+  transactionHash: Bytes!
+}
+
+type DailyVolume @entity {
+  id: ID!          # pairId-date (e.g. "WETH-USDC-20260621")
+  pairId: String!
+  date: String!
+  volume: BigDecimal!
+  tradeCount: BigInt!
+  high: BigDecimal!
+  low: BigDecimal!
+  open: BigDecimal!
+  close: BigDecimal!
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@zetheta/matching-engine",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/engine/index.ts",
+  "types": "src/engine/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "lint": "eslint src/"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20",
+    "jest": "^30.4.2",
+    "ts-jest": "^29.4.11",
+    "typescript": "^5",
+    "vitest": "^4.1.9"
+  }
+}
