@@ -17,6 +17,7 @@
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"],
   "ts-node": {
-    "experimentalResolver": true
+    "experimentalResolver": true,
+    "transpileOnly": true
   }
 }
