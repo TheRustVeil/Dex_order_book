@@ -35,8 +35,11 @@ COPY --from=deps --chown=apiuser:nodejs /app/node_modules ./node_modules
 COPY --chown=apiuser:nodejs packages/api            ./packages/api
 COPY --chown=apiuser:nodejs packages/matching-engine ./packages/matching-engine
 
-# JSON file store directory (mounted as a volume in docker-compose for persistence)
-RUN mkdir -p packages/api/data && chown -R apiuser:nodejs packages/api/data
+# JSON file store directory. The app resolves it from process.cwd() (= /app),
+# so it writes to /app/data — create that and give the non-root user ownership.
+# (packages/api/data kept too for the docker-compose volume mount.)
+RUN mkdir -p /app/data packages/api/data && \
+    chown -R apiuser:nodejs /app/data packages/api/data
 
 USER apiuser
 EXPOSE 3001
