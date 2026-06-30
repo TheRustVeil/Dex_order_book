@@ -1,53 +1,39 @@
-FROM node:20-alpine AS base
-# Install pnpm 9 directly (matches the v9 lockfile). Avoids corepack's
-# signature/keyid failures when fetching newer pnpm in CI build images.
+FROM node:20-alpine
+# Install pnpm 9 directly (matches the v9 lockfile); avoids corepack keyid errors.
 RUN npm install -g pnpm@9
 # Build tools for native modules (unrs-resolver, etc.)
 RUN apk add --no-cache python3 make g++
 
-# ── Dependency layer ──────────────────────────────────────────────────────────
-FROM base AS deps
 WORKDIR /app
-# All workspace manifests must be present for a frozen install
+
+# ── Install ───────────────────────────────────────────────────────────────────
+# All workspace manifests must be present so pnpm can resolve the workspace graph.
 COPY .npmrc pnpm-workspace.yaml pnpm-lock.yaml package.json ./
-COPY packages/api/package.json          ./packages/api/
+COPY packages/api/package.json             ./packages/api/
 COPY packages/matching-engine/package.json ./packages/matching-engine/
-COPY packages/frontend/package.json     ./packages/frontend/
-COPY packages/contracts/package.json    ./packages/contracts/
-COPY packages/p2p-network/package.json  ./packages/p2p-network/
-# Install API + its workspace dependency (matching-engine), including devDeps
-# so that ts-node (a devDep of @zetheta/api) is available in the runner.
+COPY packages/frontend/package.json        ./packages/frontend/
+COPY packages/contracts/package.json       ./packages/contracts/
+COPY packages/p2p-network/package.json     ./packages/p2p-network/
+# Install the API + its workspace dependency (matching-engine), including devDeps
+# so ts-node is available. pnpm places the API's binaries in
+# packages/api/node_modules/.bin — NOT the repo-root node_modules/.bin.
 RUN pnpm install --no-frozen-lockfile --filter @zetheta/api...
 
-# ── Production runner ─────────────────────────────────────────────────────────
-# We run the API with ts-node rather than compiling to JS.
-# Reason: @zetheta/matching-engine's package.json "main" points to its
-# TypeScript source (src/engine/index.ts), which ts-node can load directly
-# via the "experimentalResolver" option in packages/api/tsconfig.json.
-# Compiling with tsc would require the matching-engine built to dist/ first.
-FROM base AS runner
-WORKDIR /app
+# ── Source ────────────────────────────────────────────────────────────────────
+# node_modules is excluded by .dockerignore, so these COPYs add source files
+# alongside the node_modules pnpm just created (Docker COPY merges directories).
+COPY packages/api            ./packages/api
+COPY packages/matching-engine ./packages/matching-engine
 
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 apiuser
+# JSON file store directory. The app resolves it from process.cwd() (= /app).
+RUN mkdir -p /app/data
 
-COPY --from=deps --chown=apiuser:nodejs /app/node_modules ./node_modules
-COPY --chown=apiuser:nodejs packages/api            ./packages/api
-COPY --chown=apiuser:nodejs packages/matching-engine ./packages/matching-engine
-
-# JSON file store directory. The app resolves it from process.cwd() (= /app),
-# so it writes to /app/data — create that and give the non-root user ownership.
-# (packages/api/data kept too for the docker-compose volume mount.)
-RUN mkdir -p /app/data packages/api/data && \
-    chown -R apiuser:nodejs /app/data packages/api/data
-
-USER apiuser
+# P2P needs host networking / extra deps not in this image — disabled here.
+ENV NODE_ENV=production P2P_ENABLED=0
 EXPOSE 3001
 
-# P2P networking requires host network access and additional packages not in
-# this image — disable it for the containerised environment.
-ENV NODE_ENV=production P2P_ENABLED=0
-
-CMD ["node_modules/.bin/ts-node", \
+# ts-node is run transpile-only (the API is intentionally not tsc-clean).
+CMD ["packages/api/node_modules/.bin/ts-node", \
+     "--transpile-only", \
      "-P", "packages/api/tsconfig.json", \
      "packages/api/src/main.ts"]
