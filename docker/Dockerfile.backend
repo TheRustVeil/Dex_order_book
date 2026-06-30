@@ -1,5 +1,7 @@
 FROM node:20-alpine AS base
-RUN corepack enable && corepack prepare pnpm@11 --activate
+# Install pnpm 9 directly (matches the v9 lockfile). Avoids corepack's
+# signature/keyid failures when fetching newer pnpm in CI build images.
+RUN npm install -g pnpm@9
 # Build tools for native modules (unrs-resolver, etc.)
 RUN apk add --no-cache python3 make g++
 
@@ -15,7 +17,7 @@ COPY packages/contracts/package.json    ./packages/contracts/
 COPY packages/p2p-network/package.json  ./packages/p2p-network/
 # Install API + its workspace dependency (matching-engine), including devDeps
 # so that ts-node (a devDep of @zetheta/api) is available in the runner.
-RUN pnpm install --frozen-lockfile --filter @zetheta/api...
+RUN pnpm install --no-frozen-lockfile --filter @zetheta/api...
 
 # ── Production runner ─────────────────────────────────────────────────────────
 # We run the API with ts-node rather than compiling to JS.

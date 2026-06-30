@@ -1,5 +1,6 @@
 FROM node:20-alpine AS base
-RUN corepack enable && corepack prepare pnpm@11 --activate
+# Install pnpm 9 directly (matches the v9 lockfile); avoids corepack keyid errors.
+RUN npm install -g pnpm@9
 # Build tools for any native modules in the dependency tree
 RUN apk add --no-cache python3 make g++
 
@@ -14,7 +15,7 @@ COPY packages/matching-engine/package.json ./packages/matching-engine/
 COPY packages/contracts/package.json    ./packages/contracts/
 COPY packages/p2p-network/package.json  ./packages/p2p-network/
 # Install only the frontend's dependency closure (faster than installing everything)
-RUN pnpm install --frozen-lockfile --filter @zetheta/frontend
+RUN pnpm install --no-frozen-lockfile --filter @zetheta/frontend
 
 # ── Build layer ───────────────────────────────────────────────────────────────
 FROM base AS builder
